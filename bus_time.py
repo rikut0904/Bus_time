@@ -1,29 +1,46 @@
 import datetime as dt
 import time
 import csv
-import PySimpleGUI as sg
-#GUIデザイン
-#sg.theme("Dark")
-sg.theme("LightPurple")
+import tkinter as tk
+from tkinter import ttk, messagebox
+import tkinter.font as tkFont
+import platform
+
+def get_japanese_font():
+    available = set(tkFont.families())
+
+    candidates = [
+        # Windows
+        "Yu Gothic UI", "Yu Gothic", "Meiryo", "MS PGothic", "MS UI Gothic",
+        # macOS
+        "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Hiragino Kaku Gothic Pro",
+        # Linux
+        "Noto Sans CJK JP", "Noto Sans JP", "IPAGothic", "VL Gothic", "TakaoGothic",
+    ]
+    for name in candidates:
+        if name in available:
+            return name
+        
+    return "TkDefaultFont"
+
 def early():
     #初期データ入力(休暇は次を参照:https://www.kanazawa-it.ac.jp/about_kit/yatsukaho.html)
-    #現在のバージョン:v2j   024
     #日付データ
     dt_now = dt.datetime.now()
     week = dt_now.weekday()#月:0,火:1,水:2,木:3,金:4,土:5,日:6
     year, month, day = dt_now.year, dt_now.month, dt_now.day
 
     #夏季休暇
-    SmmS, SmdS = 8, 5   #夏季休暇始まり月, 日
-    SmmF, SmdF = 9, 13  #夏季休暇終わり月, 日
+    SmmS, SmdS = 8, 4   #夏季休暇始まり月, 日
+    SmmF, SmdF = 9, 12  #夏季休暇終わり月, 日
     #春季休暇
-    SpmS, SpdS = 3, 1   #春季休暇始まり月, 日
+    SpmS, SpdS = 3, 2   #春季休暇始まり月, 日
     SpmF, SpdF = 3, 31  #春季休暇終わり月, 日
     #祝日及びその他運休日(dayを変更)
-    month4_7 = (month == 4 and day == 29) or (month == 5 and 3 <= day <= 6) or (month == 6 and day == 1) or (month == 7 and 13 <= day <= 15)
-    month8_9 = (month == 8 and (day == 3 or 8 <= day <= 18 or day == 24 or day == 31)) or (month == 9 and (14 <= day <= 16 or 22 <= day <= 23))
-    month10_12 = (month == 10 and (day == 14 or 19 <= day <= 20)) or (month == 11 and (3 <= day <= 4 or day == 23)) or (month == 12 and 27 <= day <= 31)
-    month1_3 = (month == 1 and (1 <= day <= 6 or day == 13)) or (month == 2 and (day == 11 or 23 <= day <= 24)) and (month == 3 and day == 20)
+    month4_7 = (month == 4 and day == 29) or (month == 5 and 3 <= day <= 6) or (month == 6 and day == 1) or (month == 7 and 19 <= day <= 21)
+    month8_9 = (month == 8 and (day == 2 or 7 <= day <= 17 or day == 23 or day == 30)) or (month == 9 and (13 <= day <= 15 or 21 <= day <= 23))
+    month10_12 = (month == 10 and (day == 13 or 18 <= day <= 19)) or (month == 11 and (day == 3 or day == 24)) or (month == 12 and 27 <= day <= 31)
+    month1_3 = (month == 1 and (1 <= day <= 6 or day == 12)) or (month == 2 and (day == 11 or day == 23)) and (month == 3 and day == 20)
     # print(week)
     #バス時刻表
     if not(month4_7 or month8_9 or month10_12 or month1_3):
@@ -68,30 +85,92 @@ def early():
 
 #GUI設定
 class GUI():
-    def __init__(self, info, place):
-        if info == "本日は運休です" or info == "本日の運航は終了しました":
-            layout = [[sg.T("今日は:"),sg.T("", key="-TODAY-")], # type: ignore
-                [sg.T("現在時刻:"),sg.T("", key="-CLOCK-")], # type: ignore
-                [sg.T("",key="-info-")]]
-            layout_size = (250,100)
-        elif place == '23号館→65号館' or place == '65号館→23号館':
-            layout = [[sg.T("今日は:"),sg.T("", key="-TODAY-"), ], # type: ignore
-                    [sg.T("現在時刻:"),sg.T("", key="-CLOCK-")], # type: ignore
-                    [sg.Combo(['23号館→65号館', '65号館→23号館'], default_value = place, size =(30,1), 
-                                key = "-PULL-", enable_events=True)],
-                    [sg.T("次のバスの時間は:"),sg.T("",key="-BUS_DEPA_TIME-")],
-                    [sg.T("到着予定時刻は:"),sg.T("",key="-BUS_ARR_TIME-")],
-                    [sg.T("次のバスの時間まで:")],
-                    [sg.T("",key="-NEXT_TIME-")]]
-            layout_size = (300,230)
+    def __init__(self, info, place, window_position=None):
+        self.root = tk.Tk()
+        # 日本語フォントの設定
+        font_family = get_japanese_font()
+        print(f"使用フォント: {font_family}")
+        self.root.title("Bus Time")
+        
+        # スタイルの設定
+        self.style = ttk.Style()
+        self.style.configure('TLabel', font=(font_family, 10))
+        self.style.configure('TCombobox', font=(font_family, 10))
+        
+        # デフォルトフォントの設定
+        default_font = tkFont.nametofont("TkDefaultFont")
+        default_font.configure(family=font_family, size=10)
+        
+        # ウィンドウ位置の設定
+        if window_position:
+            self.root.geometry(f"400x300+{window_position[0]}+{window_position[1]}")
         else:
-            layout = [[sg.T("今日は:"),sg.T("", key="-TODAY-")], # type: ignore
-                    [sg.T("現在時刻:"),sg.T("", key="-CLOCK-")], # type: ignore
-                    [sg.Combo(['23号館→65号館', '65号館→23号館'], default_value = '選択してください', size =(30,1), 
-                                key = "-PULL-", enable_events=True)]]
-            layout_size = (320,150)
-        self.window = sg.Window("八束穂キャンパスバス", layout,
-                        font = (None,15), finalize = True, size = layout_size)
+            self.root.geometry("400x300")
+            # 中央に配置
+            self.root.update_idletasks()
+            x = (self.root.winfo_screenwidth() // 2) - (400 // 2)
+            y = (self.root.winfo_screenheight() // 2) - (300 // 2)
+            self.root.geometry(f"400x300+{x}+{y}")
+        
+        # ウィジェットの辞書を初期化
+        self.widgets = {}
+        
+        # メインフレーム
+        main_frame = ttk.Frame(self.root, padding="10")
+        main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        
+        # 今日の日付表示
+        ttk.Label(main_frame, text="今日は:", font=(font_family, 10)).grid(row=0, column=0, sticky=tk.W, pady=2)
+        self.widgets["-TODAY-"] = ttk.Label(main_frame, text="", font=(font_family, 10))
+        self.widgets["-TODAY-"].grid(row=0, column=1, sticky=tk.W, pady=2)
+        
+        # 現在時刻表示
+        ttk.Label(main_frame, text="現在時刻:", font=(font_family, 10)).grid(row=1, column=0, sticky=tk.W, pady=2)
+        self.widgets["-CLOCK-"] = ttk.Label(main_frame, text="", font=(font_family, 10))
+        self.widgets["-CLOCK-"].grid(row=1, column=1, sticky=tk.W, pady=2)
+        
+        if info == "本日は運休です" or info == "本日の運航は終了しました":
+            # 運休情報表示
+            self.widgets["-info-"] = ttk.Label(main_frame, text=info, foreground="red", font=(font_family, 10))
+            self.widgets["-info-"].grid(row=2, column=0, columnspan=2, pady=10)
+            self.root.geometry("400x150")
+        elif place == '23号館→65号館' or place == '65号館→23号館':
+            # ルート選択
+            ttk.Label(main_frame, text="ルート:", font=(font_family, 10)).grid(row=2, column=0, sticky=tk.W, pady=2)
+            self.widgets["-PULL-"] = ttk.Combobox(main_frame, values=['23号館→65号館', '65号館→23号館'], 
+                                                 state="readonly", width=25, font=(font_family, 10))
+            self.widgets["-PULL-"].set(place)
+            self.widgets["-PULL-"].grid(row=2, column=1, sticky=tk.W, pady=2)
+            self.widgets["-PULL-"].bind('<<ComboboxSelected>>', self.on_route_change)
+            
+            # バス情報表示
+            ttk.Label(main_frame, text="次のバスの時間は:", font=(font_family, 10)).grid(row=3, column=0, sticky=tk.W, pady=2)
+            self.widgets["-BUS_DEPA_TIME-"] = ttk.Label(main_frame, text="", font=(font_family, 10))
+            self.widgets["-BUS_DEPA_TIME-"].grid(row=3, column=1, sticky=tk.W, pady=2)
+            
+            ttk.Label(main_frame, text="到着予定時刻は:", font=(font_family, 10)).grid(row=4, column=0, sticky=tk.W, pady=2)
+            self.widgets["-BUS_ARR_TIME-"] = ttk.Label(main_frame, text="", font=(font_family, 10))
+            self.widgets["-BUS_ARR_TIME-"].grid(row=4, column=1, sticky=tk.W, pady=2)
+            
+            ttk.Label(main_frame, text="次のバスの時間まで:", font=(font_family, 10)).grid(row=5, column=0, sticky=tk.W, pady=2)
+            self.widgets["-NEXT_TIME-"] = ttk.Label(main_frame, text="", foreground="blue", font=(font_family, 10))
+            self.widgets["-NEXT_TIME-"].grid(row=5, column=1, sticky=tk.W, pady=2)
+            
+            self.root.geometry("400x250")
+        else:
+            # 初期状態（ルート選択のみ）
+            ttk.Label(main_frame, text="ルート:", font=(font_family, 10)).grid(row=2, column=0, sticky=tk.W, pady=2)
+            self.widgets["-PULL-"] = ttk.Combobox(main_frame, values=['23号館→65号館', '65号館→23号館'], 
+                                                 state="readonly", width=25, font=(font_family, 10))
+            self.widgets["-PULL-"].set('選択してください')
+            self.widgets["-PULL-"].grid(row=2, column=1, sticky=tk.W, pady=2)
+            self.widgets["-PULL-"].bind('<<ComboboxSelected>>', self.on_route_change)
+            
+            self.root.geometry("400x150")
+    
+    def on_route_change(self, event=None):
+        """ルート変更時のイベントハンドラー"""
+        pass  # メインループで処理
 
 #現在時刻取得
 def time_getter():
@@ -146,67 +225,123 @@ def next_bus_time(bus_Sche_time, hour, minute, second, info):
     return (next_time, bus_depa_time, bus_arr_time, info)
 
 #mainループ
-def main():
-    next_time = ""
-    year, month, day, bus23to65, bus65to23, info = early()
-    place = ""
-    gui = GUI(info, place)
-    win = gui.window
-    bus_Sche_time = ""
-    info_layout_1 , info_layout_2 , early_layout = 0, 0, 0
-    while True:
+class BusTimeApp:
+    def __init__(self):
+        self.next_time = ""
+        self.year, self.month, self.day, self.bus23to65, self.bus65to23, self.info = early()
+        self.place = ""
+        self.window_position = None  # ウィンドウ位置を保存
+        self.gui = GUI(self.info, self.place, self.window_position)
+        self.bus_Sche_time = ""
+        self.info_layout_1, self.info_layout_2, self.early_layout = 0, 0, 0
+        self.last_hour = -1
+        self.last_minute = -1
+        self.last_second = -1
+        
+        # 初期更新
+        self.update_display()
+        
+        # 1秒ごとに更新
+        self.gui.root.after(1000, self.update_loop)
+        
+        # ウィンドウクローズ時の処理
+        self.gui.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+    
+    def update_loop(self):
+        """メインループの代わり"""
         hour, minute, second, time_now = time_getter()
-        #年,月,日の取得
-        if hour == 0 and minute == 0 and second == 0:
-            year, month, day, bus23to65, bus65to23, info = early()
-            win.close()
-            gui = GUI(info, place)
-            win = gui.window
-        today = f'{year}年{month}月{day}日'
-        print(today)
-        print(time_now)
-        # print(bus23to65)
-        # print(bus65to23)
-        eve, val = win.read(timeout=0.1)
-        if eve == sg.WINDOW_CLOSED:
-            break
-        elif eve == "-PULL-":
-            place = val["-PULL-"]
-            if place == '23号館→65号館':
-                bus_Sche_time = bus23to65
-            else:
-                bus_Sche_time = bus65to23
-            next_time, bus_depa_time, bus_arr_time, info = next_bus_time(bus_Sche_time, hour, minute, second, info)
-            while early_layout != 1:
-                win.close()
-                gui = GUI(info, place)
-                win = gui.window
-                early_layout += 1
-        # print(bus_Sche_time)
-        next_time, bus_depa_time, bus_arr_time, info = next_bus_time(bus_Sche_time, hour, minute, second, info)
-        # print(f"info={info}")
-        win["-TODAY-"].update(today)
-        win["-CLOCK-"].update(time_now)
-        if info == "本日は運休です":
-            while info_layout_1 != 1:
-                win.close()
-                gui = GUI(info, place)
-                win = gui.window
-                info_layout_1 += 1
-            win["-info-"].update(info)
-        elif info == "本日の運航は終了しました":
-            while info_layout_2 != 1:
-                win.close()
-                gui = GUI(info, place)
-                win = gui.window
-                info_layout_2 += 1
-            win["-info-"].update(info)
-        elif early_layout != 0:
-            info_layout_1 = 0
-            info_layout_2 = 0
-            win["-BUS_DEPA_TIME-"].update(bus_depa_time)
-            win["-BUS_ARR_TIME-"].update(bus_arr_time)
-            win["-NEXT_TIME-"].update(next_time)
+        
+        # 日付が変わった場合の処理
+        if hour == 0 and minute == 0 and second == 0 and self.last_hour != 0:
+            # 現在のウィンドウ位置を保存
+            self.window_position = (self.gui.root.winfo_x(), self.gui.root.winfo_y())
+            self.year, self.month, self.day, self.bus23to65, self.bus65to23, self.info = early()
+            self.gui.root.destroy()
+            self.gui = GUI(self.info, self.place, self.window_position)
+            self.gui.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+            self.info_layout_1, self.info_layout_2, self.early_layout = 0, 0, 0
+        
+        self.last_hour, self.last_minute, self.last_second = hour, minute, second
+        
+        # 表示更新
+        self.update_display()
+        
+        # 次の更新をスケジュール
+        self.gui.root.after(1000, self.update_loop)
+    
+    def update_display(self):
+        """表示の更新"""
+        hour, minute, second, time_now = time_getter()
+        today = f'{self.year}年{self.month}月{self.day}日'
+        
+        # 基本情報の更新
+        self.gui.widgets["-TODAY-"].config(text=today)
+        self.gui.widgets["-CLOCK-"].config(text=time_now)
+        
+        # ルート選択の処理
+        if "-PULL-" in self.gui.widgets:
+            current_place = self.gui.widgets["-PULL-"].get()
+            if current_place != self.place and current_place in ['23号館→65号館', '65号館→23号館']:
+                # 現在のウィンドウ位置を保存
+                self.window_position = (self.gui.root.winfo_x(), self.gui.root.winfo_y())
+                self.place = current_place
+                if self.place == '23号館→65号館':
+                    self.bus_Sche_time = self.bus23to65
+                else:
+                    self.bus_Sche_time = self.bus65to23
+                self.early_layout = 0
+                # レイアウトを更新
+                self.gui.root.destroy()
+                self.gui = GUI(self.info, self.place, self.window_position)
+                self.gui.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+                self.early_layout = 1
+        
+        # バス時刻の計算と表示
+        if self.bus_Sche_time:
+            self.next_time, bus_depa_time, bus_arr_time, self.info = next_bus_time(
+                self.bus_Sche_time, hour, minute, second, self.info)
+            
+            if self.info == "本日は運休です":
+                if self.info_layout_1 != 1:
+                    # 現在のウィンドウ位置を保存
+                    self.window_position = (self.gui.root.winfo_x(), self.gui.root.winfo_y())
+                    self.gui.root.destroy()
+                    self.gui = GUI(self.info, self.place, self.window_position)
+                    self.gui.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+                    self.info_layout_1 = 1
+                if "-info-" in self.gui.widgets:
+                    self.gui.widgets["-info-"].config(text=self.info)
+            elif self.info == "本日の運航は終了しました":
+                if self.info_layout_2 != 1:
+                    # 現在のウィンドウ位置を保存
+                    self.window_position = (self.gui.root.winfo_x(), self.gui.root.winfo_y())
+                    self.gui.root.destroy()
+                    self.gui = GUI(self.info, self.place, self.window_position)
+                    self.gui.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+                    self.info_layout_2 = 1
+                if "-info-" in self.gui.widgets:
+                    self.gui.widgets["-info-"].config(text=self.info)
+            elif self.early_layout != 0:
+                self.info_layout_1 = 0
+                self.info_layout_2 = 0
+                if "-BUS_DEPA_TIME-" in self.gui.widgets:
+                    self.gui.widgets["-BUS_DEPA_TIME-"].config(text=bus_depa_time)
+                if "-BUS_ARR_TIME-" in self.gui.widgets:
+                    self.gui.widgets["-BUS_ARR_TIME-"].config(text=bus_arr_time)
+                if "-NEXT_TIME-" in self.gui.widgets:
+                    self.gui.widgets["-NEXT_TIME-"].config(text=self.next_time)
+    
+    def on_closing(self):
+        """ウィンドウクローズ時の処理"""
+        self.gui.root.destroy()
+    
+    def run(self):
+        """アプリケーションの実行"""
+        self.gui.root.mainloop()
+
+def main():
+    app = BusTimeApp()
+    app.run()
 
 if __name__ == '__main__':
     main()
